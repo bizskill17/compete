@@ -1,7 +1,9 @@
-dist/
 node_modules/
+data/
 .env
 .env.*
 !.env.example
 .dev.vars
+dist/
 *.tar.gz
+original.js
