@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import app from './app.js';
+import { adminRequest } from './admin.js';
 import { identity, authenticate } from './auth.js';
 const read = async (store, key) => (await store.get(key))?.json();
 const save = (store, key, data) => store.put(key, JSON.stringify(data));
@@ -12,6 +13,7 @@ export async function createAppServer(store, config = {}) {
   if (production && (!config.APP_URL || !config.APP_URL.startsWith('https://'))) throw new Error('Set APP_URL to the final HTTPS origin in production.');
   const origin = config.APP_URL ? new URL(config.APP_URL).origin : null;
   const page = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const adminPage = await readFile(new URL('../public/admin.html', import.meta.url), 'utf8');
   const rate = new Map(); let inflight = 0;
   const server = createServer(async (incoming, outgoing) => {
     const send = (body, status = 200, headers = {}) => {
@@ -24,6 +26,7 @@ export async function createAppServer(store, config = {}) {
       // Configured origin is authoritative; Host and forwarding headers never grant identity.
       const requestOrigin = origin || 'http://127.0.0.1:' + server.address().port;
       const url = new URL(incoming.url, requestOrigin), method = incoming.method;
+      if (['/admin', '/admin/'].includes(url.pathname) && method === 'GET') { send(adminPage, 200, { 'Content-Type': 'text/html; charset=utf-8' }); return; }
       if (url.pathname === '/health' && method === 'GET') { send({ ok: true }); return; }
       if (!['GET', 'HEAD', 'POST'].includes(method)) { send({ error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST' }); return; }
       if (method === 'POST' && url.pathname !== webhookPath && incoming.headers.origin !== requestOrigin) { send({ error: 'Request origin does not match this website.' }, 403); return; }
@@ -74,11 +77,18 @@ export async function createAppServer(store, config = {}) {
       // No oai-authenticated-* or X-User-* headers from the internet are forwarded.
       const request = new Request(url, { method, headers, body: method === 'POST' ? bytes : undefined });
       const environment = { ...config, BUCKET: store, PAGE: page, identity: user };
-      const run = () => app.fetch(request, environment);
+      if (url.pathname.startsWith('/api/admin/art/')) {
+        if (!user?.admin) { send({ error: 'Administrator access required.' }, 403); return; }
+        const entry = await read(store, 'entry/' + decodeURIComponent(url.pathname.slice('/api/admin/art/'.length)));
+        const art = entry && await store.get('art/' + entry.id);
+        if (!art) { send({ error: 'Image not found.' }, 404); return; }
+        send(Buffer.from(await art.arrayBuffer()), 200, { 'Content-Type': art.httpMetadata.contentType, 'Content-Disposition': 'inline' }); return;
+      }
+      const run = () => url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin/competition' ? adminRequest(request, environment) : app.fetch(request, environment);
       let response;
       if (method === 'POST') {
         let key = 'competition-write';
-        if (url.pathname === '/api/judge') {
+        if (url.pathname === '/api/judge' || url.pathname === '/api/admin/review') {
           const body = JSON.parse(bytes); key = 'judge/' + String(body.id).slice(0, 150);
         }
         response = await store.lock(key, run);
@@ -94,3 +104,4 @@ export async function createAppServer(store, config = {}) {
   server.headersTimeout = 10000;
   return server;
 }
+

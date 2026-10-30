@@ -44,7 +44,7 @@ export async function identity(store, cookie = '') {
   if (!session) return null;
   if (session.expires < Date.now()) { await store.delete(key); return null; }
   const user = await read(store, session.accountKey);
-  if (!user || (user.authVersion || 1) !== session.version) return null;
+  if (!user || user.disabled || (user.authVersion || 1) !== session.version) return null;
   return { id: user.id, email: user.email, name: user.name, admin: user.role === 'admin', sessionKey: key };
 }
 export async function authenticate(store, config, path, body, cookie) {
@@ -73,7 +73,7 @@ export async function authenticate(store, config, path, body, cookie) {
     } else {
       // Dummy derivation keeps unknown-account timing close to incorrect-password timing.
       const valid = await matches(password, user?.passwordHash || '00000000000000000000000000000000:' + '00'.repeat(64));
-      if (!user || !valid) return { status: 401, body: { error: 'Email or password is incorrect.' } };
+      if (!user || user.disabled || !valid) return { status: 401, body: { error: 'Email or password is incorrect.' } };
     }
     await store.delete(rateKey);
     const token = randomBytes(32).toString('hex');
@@ -81,3 +81,4 @@ export async function authenticate(store, config, path, body, cookie) {
     return { body: { ok: true }, cookie: sessionCookie(token) };
   });
 }
+
