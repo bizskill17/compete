@@ -37,7 +37,14 @@ export async function adminRequest(request, env) {
   const body = await request.json();
   if (path === '/api/admin/delete') {
     const { kind, id } = body;
-    if (!['category', 'competition', 'participant'].includes(kind) || typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(id)) return reply({ error: 'Invalid delete request.' }, 400);
+    if (!['category', 'competition', 'participant', 'entry'].includes(kind) || typeof id !== 'string' || id.length > 200 || !/^[a-zA-Z0-9_-]+$/.test(id)) return reply({ error: 'Invalid delete request.' }, 400);
+    if (kind === 'entry') {
+      const entry = await read(store, 'entry/' + id);
+      if (!entry) return reply({ error: 'Entry not found.' }, 404);
+      await store.delete('art/' + entry.id);
+      await store.delete('entry/' + entry.id);
+      return reply({ ok: true });
+    }
     if (kind === 'category') {
       const category = await read(store, 'category/' + id);
       if (!category) return reply({ error: 'Category not found.' }, 404);
