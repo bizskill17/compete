@@ -4,7 +4,7 @@ Open `/admin`, or use **Admin login** in the public footer. Signed-in administra
 
 ## First administrator
 
-There is no default password or public administrator signup. Set `ADMIN_EMAIL` and a temporary `ADMIN_SETUP_PASSWORD` (12–128 characters) in the server command environment, along with the same MySQL settings used by the application. Run `npm run create-admin`, then remove the temporary setup password. An existing account requires the explicit `npm run recover-admin` command instead. hPanel environment variables may not be inherited by SSH commands. Do not put credentials in the repository or expose these commands as HTTP endpoints.
+There is no default password or public administrator signup. Set `ADMIN_EMAIL` and a temporary `ADMIN_SETUP_PASSWORD` (4–20 characters) in the server command environment, along with the same MySQL settings used by the application. Run `npm run create-admin`, then remove the temporary setup password. An existing account requires the explicit `npm run recover-admin` command instead. hPanel environment variables may not be inherited by SSH commands. Do not put credentials in the repository or expose these commands as HTTP endpoints.
 
 ## Included
 

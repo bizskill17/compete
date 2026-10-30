@@ -12,7 +12,7 @@ test('admin area authorizes every operation, manages categories and participants
   const directory = await mkdtemp(join(tmpdir(), 'compete-admin-'));
   const store = new FileStore(directory); await store.init();
   const config = { ADMIN_EMAIL: 'owner@example.com', DB_PASSWORD: 'never-return-this-secret', RAZORPAY_KEY_SECRET: 'another-hidden-secret' };
-  await createAdmin(store, config.ADMIN_EMAIL, 'Administrator-password-123');
+  await createAdmin(store, config.ADMIN_EMAIL, 'Admin-password-123');
   const server = await createAppServer(store, config); await new Promise(r => server.listen(0, '127.0.0.1', r));
   const origin = 'http://127.0.0.1:' + server.address().port;
   t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r)); await rm(directory, { recursive: true, force: true }); });
@@ -22,8 +22,8 @@ test('admin area authorizes every operation, manages categories and participants
     return { status: response.status, data, text, cookie: response.headers.get('set-cookie')?.split(';')[0] };
   }
   assert.match((await request('/admin')).text, /Sign in to dashboard/);
-  const owner = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Administrator-password-123' });
-  const participant = await request('/api/auth/register', { email: 'artist@example.com', name: 'Artist', password: 'Participant-password-123' });
+  const owner = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Admin-password-123' });
+  const participant = await request('/api/auth/register', { email: 'artist@example.com', name: 'Artist', password: 'Artist-password-123' });
   for (const cookie of [undefined, participant.cookie]) {
     assert.equal((await request('/api/admin/overview', null, cookie)).status, 403);
     for (const path of ['category', 'participant', 'review']) assert.equal((await request('/api/admin/' + path, {}, cookie)).status, 403);
@@ -34,13 +34,15 @@ test('admin area authorizes every operation, manages categories and participants
   assert.equal(category.status, 200);
   assert.equal((await request('/api/admin/category', { name: 'drawing' }, owner.cookie)).status, 409);
   assert.equal((await request('/api/admin/category', { ...category.data, active: false }, owner.cookie)).data.active, false);
-  const newUser = await request('/api/admin/participant', { name: 'New artist', email: 'new@example.com', password: 'Participant-password-123', role: 'admin' }, owner.cookie);
+  assert.equal((await request('/api/admin/participant', { name: 'Short', email: 'short@example.com', password: '123' }, owner.cookie)).status, 400);
+  assert.equal((await request('/api/admin/participant', { name: 'Long', email: 'long@example.com', password: 'x'.repeat(21) }, owner.cookie)).status, 400);
+  const newUser = await request('/api/admin/participant', { name: 'New artist', email: 'new@example.com', password: 'Artist-password-123', role: 'admin' }, owner.cookie);
   assert.equal(newUser.status, 200); assert.equal(newUser.data.role, 'participant'); assert.equal(newUser.data.passwordHash, undefined);
-  assert.equal((await request('/api/admin/participant', { name: 'Copy', email: 'new@example.com', password: 'Participant-password-123' }, owner.cookie)).status, 409);
-  const login = await request('/api/auth/login', { email: 'new@example.com', password: 'Participant-password-123' });
+  assert.equal((await request('/api/admin/participant', { name: 'Copy', email: 'new@example.com', password: 'Artist-password-123' }, owner.cookie)).status, 409);
+  const login = await request('/api/auth/login', { email: 'new@example.com', password: 'Artist-password-123' });
   assert.equal((await request('/api/admin/participant', { ...newUser.data, disabled: true }, owner.cookie)).status, 200);
   assert.equal((await request('/api/state', null, login.cookie)).data.user, null);
-  assert.equal((await request('/api/auth/login', { email: 'new@example.com', password: 'Participant-password-123' })).status, 401);
+  assert.equal((await request('/api/auth/login', { email: 'new@example.com', password: 'Artist-password-123' })).status, 401);
   const put = (key, value) => store.put(key, JSON.stringify(value));
   await put('competition/c1', { id: 'c1', title: 'Drawing contest', category: 'Drawing', status: 'open' });
   assert.equal((await request('/api/admin/category', { ...category.data, name: 'Changed' }, owner.cookie)).status, 409);
@@ -78,12 +80,22 @@ test('admin browser handles login, navigation, category save, errors and logout'
   } }).window;
   t.after(() => window.close()); const doc = window.document;
   await new Promise(r => setImmediate(r)); assert(!doc.querySelector('#login').classList.contains('hide'));
-  const loginForm = doc.querySelector('#loginForm'); loginForm.elements.email.value = 'owner@example.com'; loginForm.elements.password.value = 'Administrator-password-123';
+  const passwordInput = doc.querySelector('#password'), toggle = doc.querySelector('#loginForm .password-toggle');
+  assert.equal(passwordInput.minLength, 4); assert.equal(passwordInput.maxLength, 20);
+  toggle.click(); assert.equal(passwordInput.type, 'text'); assert.equal(toggle.getAttribute('aria-label'), 'Hide password');
+  toggle.click(); assert.equal(passwordInput.type, 'password');
+  const loginForm = doc.querySelector('#loginForm'); loginForm.elements.email.value = 'owner@example.com'; loginForm.elements.password.value = 'Admin-password-123';
   await loginForm.onsubmit({ preventDefault() {}, target: loginForm });
   assert(!doc.querySelector('#app').classList.contains('hide')); assert.match(doc.querySelector('#content').textContent, /No records yet/);
   doc.querySelector('[data-section="categories"]').click(); doc.querySelector('[data-new="category"]').click();
   const form = doc.querySelector('#editorForm'); form.elements.name.value = '<Art>'; await form.onsubmit({ preventDefault() {}, target: form });
   assert.equal(doc.querySelector('#editor').open, false); assert.match(doc.querySelector('#records').textContent, /<Art>/); assert.equal(doc.querySelector('#records art'), null);
+  doc.querySelector('[data-section="participants"]').click(); doc.querySelector('[data-new="participant"]').click();
+  await new Promise(r => setImmediate(r));
+  const dynamicPassword = doc.querySelector('#editorForm input[name=password]');
+  assert.equal(dynamicPassword.minLength, 4); assert.equal(dynamicPassword.maxLength, 20);
+  doc.querySelector('#editorForm .password-toggle').click(); assert.equal(dynamicPassword.type, 'text');
+  doc.querySelector('#editor .close').click();
   doc.querySelector('[data-section="competitions"]').click(); doc.querySelector('[data-new="competition"]').click();
   assert.equal(doc.querySelector('#editorForm').elements.category.options[1].textContent, '<Art>');
   doc.querySelector('#editor .close').click();

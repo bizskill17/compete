@@ -40,7 +40,7 @@ Let Hostinger set PORT. With production enabled, participant sessions use secure
 
 ## 4. Create the organizer
 
-With the same database settings loaded in the server terminal/SSH environment, temporarily set ADMIN_SETUP_PASSWORD as a secret and run `npm run create-admin`. Remove the temporary value afterward. Shells may not inherit hPanel app variables; ensure the command uses the same settings. Passwords must be at least 12 characters. No default administrator password is shipped.
+With the same database settings loaded in the server terminal/SSH environment, temporarily set ADMIN_SETUP_PASSWORD as a secret and run `npm run create-admin`. Remove the temporary value afterward. Shells may not inherit hPanel app variables; ensure the command uses the same settings. Passwords must contain 4–20 characters. No default administrator password is shipped.
 
 ## 5. Configure Razorpay test mode
 

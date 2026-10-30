@@ -19,7 +19,7 @@ async function matches(password, stored) {
 }
 function validate(email, password) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new Error('Enter a valid email address.');
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128) throw new Error('Use a password of 12–128 characters.');
+  if (typeof password !== 'string' || password.length < 4 || password.length > 20) throw new Error('Use a password of 4–20 characters.');
 }
 export async function createAdmin(store, email, password) {
   email = normalize(email); validate(email, password);
@@ -55,7 +55,7 @@ export async function authenticate(store, config, path, body, cookie) {
     return { body: { ok: true }, cookie: 'compete_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + secure };
   }
   const email = normalize(body.email), password = body.password;
-  if (typeof password !== 'string' || password.length > 128) return { status: 400, body: { error: 'Invalid credentials.' } };
+  if (typeof password !== 'string') return { status: 400, body: { error: 'Invalid credentials.' } };
   validate(email, password);
   // Persistent per-account attempt budget; lock also prevents duplicate signups.
   return store.lock(emailKey(email), async () => {

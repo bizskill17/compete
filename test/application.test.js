@@ -13,7 +13,7 @@ test('Hostinger application: accounts, durable data, protected actions, captured
   const directory = await mkdtemp(join(tmpdir(), 'compete-'));
   const store = new FileStore(directory); await store.init();
   const config = { ADMIN_EMAIL: 'owner@example.com', RAZORPAY_KEY_ID: 'rzp_test_placeholder', RAZORPAY_KEY_SECRET: 'test-only-secret', RAZORPAY_WEBHOOK_SECRET: 'test-webhook', OPENAI_API_KEY: 'test-only-no-network' };
-  await createAdmin(store, config.ADMIN_EMAIL, 'Organizer-password-123');
+  await createAdmin(store, config.ADMIN_EMAIL, 'Owner-password-123');
   const server = await createAppServer(store, config);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const origin = 'http://127.0.0.1:' + server.address().port;
@@ -38,7 +38,7 @@ test('Hostinger application: accounts, durable data, protected actions, captured
     const text = await r.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
     return { status: r.status, data, cookie: r.headers.get('set-cookie')?.split(';')[0] };
   }
-  const admin = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Organizer-password-123' }); assert.equal(admin.status, 200);
+  const admin = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Owner-password-123' }); assert.equal(admin.status, 200);
   const user = await request('/api/auth/register', { email: 'artist@example.com', password: 'Artist-password-123', name: 'Artist' }); assert.equal(user.status, 200); assert.match(user.cookie, /^compete_session=/);
   assert.equal((await request('/api/auth/register', { email: config.ADMIN_EMAIL, password: 'Fake-password-123', name: 'Fake admin' })).status, 400);
   assert.equal((await request('/api/auth/login', { email: 'artist@example.com', password: 'Wrong-password-123' })).status, 401);
@@ -56,7 +56,7 @@ test('Hostinger application: accounts, durable data, protected actions, captured
   assert.equal((await request('/api/order', { competition: c.id }, user.cookie)).data.id, 'order_test'); assert.equal(orderCount, 1, 'Unpaid order reused');
   assert.equal((await request('/api/admin/competition', { ...c, fee: 1 }, admin.cookie)).status, 409, 'Fee locked after orders start');
   assert.equal((await request('/api/verify', { razorpay_order_id: 'order_test', razorpay_payment_id: 'pay_test', razorpay_signature: 'fake' }, user.cookie)).status, 400);
-  const other = await request('/api/auth/register', { email: 'other@example.com', password: 'Different-password-123', name: 'Other' });
+  const other = await request('/api/auth/register', { email: 'other@example.com', password: 'Other-password-123', name: 'Other' });
   const sig = createHmac('sha256', config.RAZORPAY_KEY_SECRET).update('order_test|pay_test').digest('hex');
   assert.equal((await request('/api/verify', { razorpay_order_id: 'order_test', razorpay_payment_id: 'pay_test', razorpay_signature: sig }, other.cookie)).status, 400);
   captured = true; assert.equal((await request('/api/order', { competition: c.id }, user.cookie)).data.paid, true, 'Captured payment recovers without browser callback');
@@ -86,3 +86,4 @@ test('production fails closed without persistent MySQL and HTTPS origin', async 
   await assert.rejects(createStore({ NODE_ENV: 'production' }), /Production requires/);
   await assert.rejects(createAppServer({}, { NODE_ENV: 'production' }), /APP_URL/);
 });
+

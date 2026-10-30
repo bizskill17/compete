@@ -58,7 +58,7 @@ export async function adminRequest(request, env) {
         await save(store, key, user); return reply(cleanUser(user));
       }
       if (old || email === String(env.ADMIN_EMAIL || '').trim().toLowerCase()) return reply({ error: 'This email is already used or reserved.' }, 409);
-      if (typeof body.password !== 'string' || body.password.length < 12 || body.password.length > 128) return reply({ error: 'Use a password of 12–128 characters.' }, 400);
+      if (typeof body.password !== 'string' || body.password.length < 4 || body.password.length > 20) return reply({ error: 'Use a password of 4–20 characters.' }, 400);
       const user = { id: randomUUID(), email, name, passwordHash: await hashPassword(body.password), role: 'participant', authVersion: 1, created: new Date().toISOString() };
       await save(store, key, user); return reply(cleanUser(user));
     });

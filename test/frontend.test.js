@@ -28,9 +28,13 @@ test('account dialogs and organizer form remain usable after asynchronous action
   assert(document.querySelector('[data-view=admin]').classList.contains('hide'));
   document.querySelector('#account').click();
   assert.equal(document.querySelector('#authDialog').open, true);
+  const toggle = document.querySelector('#authForm .password-toggle');
+  assert.equal(document.querySelector('#authPassword').minLength, 4); assert.equal(document.querySelector('#authPassword').maxLength, 20);
+  toggle.click(); assert.equal(document.querySelector('#authPassword').type, 'text');
+  toggle.click(); assert.equal(document.querySelector('#authPassword').type, 'password');
   document.querySelector('#registerTab').click(); assert.equal(document.querySelector('#authName').required, true);
   document.querySelector('#loginTab').click(); assert.equal(document.querySelector('#authName').required, false);
-  document.querySelector('#authEmail').value = 'owner@example.com'; document.querySelector('#authPassword').value = 'Organizer-password-123';
+  document.querySelector('#authEmail').value = 'owner@example.com'; document.querySelector('#authPassword').value = 'Owner-password-123';
   await document.querySelector('#authForm').onsubmit({ preventDefault() {}, target: document.querySelector('#authForm') });
   assert.equal(document.querySelector('#authDialog').open, false);
   assert.equal(document.querySelector('[data-view=admin]').classList.contains('hide'), false);
@@ -38,9 +42,10 @@ test('account dialogs and organizer form remain usable after asynchronous action
   const form = document.querySelector('#compForm');
   form.elements.title.value = 'New competition'; form.elements.description.value = 'Creative work'; form.elements.rules.value = 'Original'; form.elements.deadline.value = '2099-11-07';
   await form.onsubmit({ preventDefault() {}, target: form });
-  assert.equal(form.querySelector('button').disabled, false, 'Save button restored after successful save');
+  assert.equal(form.querySelector('button:not(.password-toggle)').disabled, false, 'Save button restored after successful save');
   assert.equal(document.querySelector('#compDialog').open, false);
   document.querySelector('#account').click(); await document.querySelector('#signOut').onclick();
   assert.match(document.querySelector('#account').textContent, /Sign in/);
   assert.equal(errors.length, 0, errors.map(e => e.message).join('\n'));
 });
+
