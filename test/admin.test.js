@@ -26,7 +26,7 @@ test('admin area authorizes every operation, manages categories and participants
   const participant = await request('/api/auth/register', { email: 'artist@example.com', name: 'Artist', password: 'Artist-password-123' });
   for (const cookie of [undefined, participant.cookie]) {
     assert.equal((await request('/api/admin/overview', null, cookie)).status, 403);
-    for (const path of ['category', 'participant', 'review']) assert.equal((await request('/api/admin/' + path, {}, cookie)).status, 403);
+    for (const path of ['category', 'participant', 'review', 'delete']) assert.equal((await request('/api/admin/' + path, {}, cookie)).status, 403);
     assert.equal((await request('/api/admin/art/missing', null, cookie)).status, 403);
   }
   assert.equal((await request('/api/admin/category', { name: 'Art' }, owner.cookie, 'https://evil.example')).status, 403);
@@ -73,6 +73,7 @@ test('admin browser handles login, navigation, category save, errors and logout'
       else if (url === '/api/auth/login') { loggedIn = true; body = { ok: true }; }
       else if (url === '/api/admin/overview') body = data;
       else if (url === '/api/admin/category') { const c = JSON.parse(options.body); data.categories.push({ ...c, id: 'cat1' }); body = c; }
+      else if (url === '/api/admin/delete') { const b = JSON.parse(options.body); data.categories = data.categories.filter(c => c.id !== b.id); body = { ok: true }; }
       else if (url === '/api/auth/logout') { loggedIn = false; body = { ok: true }; }
       else throw new Error('Unexpected URL ' + url);
       return { ok: true, json: async () => body };
@@ -100,5 +101,11 @@ test('admin browser handles login, navigation, category save, errors and logout'
   assert.equal(doc.querySelector('#editorForm').elements.category.options[1].textContent, '<Art>');
   doc.querySelector('#editor .close').click();
   for (const section of ['participants', 'entries', 'payments', 'settings', 'dashboard']) doc.querySelector('[data-section="'+section+'"]').click();
+  doc.querySelector('[data-section="categories"]').click();
+  const deleteButton = doc.querySelector('[data-delete-kind="category"]');
+  assert(deleteButton.querySelector('svg')); assert.equal(deleteButton.getAttribute('aria-label'), 'Delete category');
+  assert(doc.querySelector('[data-edit-category] svg'));
+  window.confirm = () => false; await deleteButton.onclick(); assert.equal(data.categories.length, 1);
+  window.confirm = () => true; await deleteButton.onclick(); assert.equal(data.categories.length, 0);
   await doc.querySelector('#logout').onclick(); assert.equal(loggedIn, false); assert.deepEqual(errors, []);
 });

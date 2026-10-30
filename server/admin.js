@@ -35,6 +35,50 @@ export async function adminRequest(request, env) {
   }
   if (request.method !== 'POST') return reply({ error: 'Not found' }, 404);
   const body = await request.json();
+  if (path === '/api/admin/delete') {
+    const { kind, id } = body;
+    if (!['category', 'competition', 'participant'].includes(kind) || typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(id)) return reply({ error: 'Invalid delete request.' }, 400);
+    if (kind === 'category') {
+      const category = await read(store, 'category/' + id);
+      if (!category) return reply({ error: 'Category not found.' }, 404);
+      if ((await list(store, 'competition/')).some(c => c.category === category.name)) return reply({ error: 'This category is used by a competition. Deactivate it instead.' }, 409);
+      await store.delete('category/' + id); return reply({ ok: true });
+    }
+    const [entries, orders] = await Promise.all(['entry/', 'order/'].map(prefix => list(store, prefix)));
+    if (kind === 'competition') {
+      if (!await read(store, 'competition/' + id)) return reply({ error: 'Competition not found.' }, 404);
+      if (entries.some(e => e.competition === id) || orders.some(o => o.competition === id)) return reply({ error: 'This competition has entries or payment orders. Close it instead.' }, 409);
+      // Registration keys include the competition ID even when records have no orders.
+      if ((await store.list({ prefix: 'registration/' + id + '/' })).objects.length) return reply({ error: 'This competition has registrations. Close it instead.' }, 409);
+      await store.delete('competition/' + id); return reply({ ok: true });
+    }
+    const account = (await list(store, 'account/')).find(a => a.id === id);
+    if (!account) return reply({ error: 'Participant not found.' }, 404);
+    if (account.role === 'admin') return reply({ error: 'Administrator accounts cannot be deleted here.' }, 403);
+    if (entries.some(e => e.uid === id) || orders.some(o => o.uid === id)) return reply({ error: 'This participant has entries or payment orders. Suspend the account instead.' }, 409);
+    let cursor;
+    do {
+      const page = await store.list({ prefix: 'registration/', cursor });
+      if (page.objects.some(o => o.key.endsWith('/' + id))) return reply({ error: 'This participant has registrations. Suspend the account instead.' }, 409);
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+    const key = emailKey(account.email);
+    return store.lock(key, async () => {
+      const current = await read(store, key);
+      if (!current || current.id !== id || current.role === 'admin') return reply({ error: 'Participant could not be deleted.' }, 409);
+      let cursor;
+      do {
+        const page = await store.list({ prefix: 'session/', cursor });
+        for (const object of page.objects) {
+          const session = await read(store, object.key);
+          if (session?.accountKey === key) await store.delete(object.key);
+        }
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+      await store.delete(key);
+      return reply({ ok: true });
+    });
+  }
   if (path === '/api/admin/category') {
     const name = String(body.name || '').trim();
     if (!name || name.length > 50 || (body.id && !/^[a-zA-Z0-9-]{1,80}$/.test(body.id))) return reply({ error: 'Enter a category name of 1–50 characters.' }, 400);
