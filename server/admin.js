@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { aiProvider } from './judging.js';
 import { emailKey, hashPassword } from './auth.js';
 const read = async (store, key) => (await store.get(key))?.json();
 const save = (store, key, value) => store.put(key, JSON.stringify(value));
@@ -28,7 +29,7 @@ export async function adminRequest(request, env) {
       cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
     return reply({ competitions, categories, participants: accounts.map(cleanUser), entries, payments: keyedPayments,
-      ready: { payments: !!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET), ai: !!env.OPENAI_API_KEY, webhook: !!env.RAZORPAY_WEBHOOK_SECRET, database: !!env.DB_NAME },
+      ready: { payments: !!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET), ai: !!aiProvider(env), aiProvider: aiProvider(env), webhook: !!env.RAZORPAY_WEBHOOK_SECRET, database: !!env.DB_NAME },
       stats: { participants: accounts.filter(a => a.role !== 'admin').length, active: competitions.filter(c => c.status === 'open').length,
         pending: entries.filter(e => !e.reviewStatus).length, collected: keyedPayments.filter(p => p.paid).reduce((sum, p) => sum + p.amount, 0) } });
   }

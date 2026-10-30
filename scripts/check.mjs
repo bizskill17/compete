@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { strict as assert } from 'node:assert';
-for (const path of ['server/admin.js', 'server.js', 'server/app.js', 'server/storage.js', 'server/auth.js', 'server/http.js', 'scripts/admin.mjs']) {
+for (const path of ['server/judging.js', 'server/admin.js', 'server.js', 'server/app.js', 'server/storage.js', 'server/auth.js', 'server/http.js', 'scripts/admin.mjs']) {
   const result = spawnSync(process.execPath, ['--check', path], { stdio: 'inherit' });
   assert.equal(result.status, 0, path + ' syntax check failed');
 }
