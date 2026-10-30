@@ -34,10 +34,24 @@ export async function judgeArtwork(config, competition, art) {
       });
     }
     if (!response.ok) {
+      // Only log bounded diagnostic codes; never log provider bodies or credentials.
+      let failure;
+      try { failure = await response.json(); } catch {}
+      const reason = failure?.error?.details?.find(detail => typeof detail.reason === 'string')?.reason;
+      const code = /^[A-Z_]{1,80}$/.test(reason || '') ? reason : 'UNKNOWN';
+      console.error('AI provider rejected request:', provider, 'HTTP', response.status, 'reason', code);
+      const explanation = String(failure?.error?.message || '').toLowerCase();
+      if (provider === 'Gemini' && (code.includes('API_KEY') || /api key|api_key/.test(explanation))) {
+        throw new JudgingError('Gemini API key was rejected or restricted. Create a replacement key in Google AI Studio, update GEMINI_API_KEY in Hostinger, save and redeploy.');
+      }
+      if (provider === 'Gemini' && /location|region|country/.test(explanation)) {
+        throw new JudgingError('Gemini is unavailable in the hosting server region. Check your Google API region eligibility and Hostinger server location.');
+      }
+      if (response.status === 400) throw new JudgingError(provider + ' rejected the request (HTTP 400). Check the model setting and API project configuration. Runtime logs include the diagnostic reason.');
       if ([401, 403].includes(response.status)) throw new JudgingError(provider + ' access was denied. Ask the administrator to check the API key and permissions.');
       if (response.status === 429) throw new JudgingError(provider + ' quota or rate limit reached. Check API usage and billing, then retry.');
       if (response.status === 404) throw new JudgingError(provider + ' model unavailable. Check the model setting in Hostinger.');
-      throw new JudgingError(provider + ' service unavailable. Your entry remains pending; retry later.');
+      throw new JudgingError(provider + ' service unavailable (HTTP ' + response.status + '). Your entry remains pending; retry later.');
     }
     const body = await response.json();
     const candidate = body.candidates?.[0];

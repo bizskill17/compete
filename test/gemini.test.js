@@ -22,6 +22,8 @@ test('Gemini uses a private header, structured image request and validated score
  const state=await (await app.fetch(new Request('https://example.com/api/state'),env)).json();assert.equal(state.ready.ai,true);assert.equal(state.ready.aiProvider,'Gemini');
  const overview=await (await adminRequest(new Request('https://example.com/api/admin/overview'),{...env,identity:{admin:true}})).json();assert.equal(overview.ready.ai,true);assert.equal(overview.ready.aiProvider,'Gemini');assert(!JSON.stringify(overview).includes(key));
  async function fails(response,pattern){values.set('entry/e1',{id:'e1',uid:'artist',competition:'c1',status:'pending'});global.fetch=async()=>response;const r=await judge();assert.equal(r.status,503);const body=await r.json();assert.match(body.error,pattern);assert(!JSON.stringify(body).includes(key));assert.equal(values.get('entry/e1').status,'pending');}
+ await fails(Response.json({error:{message:'API key not valid.',details:[{reason:'API_KEY_INVALID'}]}},{status:400}),/API key was rejected/);
+ await fails(Response.json({error:{message:'Invalid request format'}},{status:400}),/rejected the request \(HTTP 400\)/);
  await fails(new Response('',{status:403}),/access was denied/);await fails(new Response('',{status:429}),/quota or rate limit/);await fails(new Response('',{status:404}),/model unavailable/);
  await fails(Response.json({candidates:[{finishReason:'SAFETY'}]}),/could not complete/);
  await fails(Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({...score,creativity:100})}]}}]}),/invalid scorecard/);
