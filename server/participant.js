@@ -18,7 +18,7 @@ export async function participantRequest(request,env){
   const registrations=(await records(store,'registration/')).filter(r=>r.key.endsWith('/'+user.id));
   const ids=new Set([...registrations.map(r=>r.key.split('/')[1]),...entries.map(e=>e.competition)]);
   const competitions=[...ids].map(id=>{const c=all.find(c=>c.id===id);if(!c)return null;const reg=registrations.find(r=>r.key==='registration/'+id+'/'+user.id)?.value,entry=entries.find(e=>e.competition===id);return {competition:{id:c.id,title:c.title,category:c.category,deadline:c.deadline,status:c.status,fee:c.fee,thumbnail:!!c.thumbnail,resultsPublished:!!c.resultsPublished},joined:!!entry||reg?.paid===true||reg?.joined===true,paymentPending:!!reg?.order&&!reg?.paid&&!entry,entry:entry?publicEntry(entry,c):null};}).filter(Boolean);
-  return reply({profile:{name:account.name,email:account.email,mobile:account.mobile||'',photo:!!account.photoKey,photoUpdatedAt:account.photoUpdatedAt||''},competitions});
+  return reply({profile:{name:account.name,email:account.email,mobile:account.mobile||'',photo:!!account.photoKey,photoUpdatedAt:account.photoUpdatedAt||'',city:account.city||'',state:account.state||'',interests:account.interests||[]},interestOptions:[...new Set([...(await records(store,'category/')).filter(r=>r.value.active).map(r=>r.value.name),...all.filter(c=>c.status!=='draft').map(c=>c.category)])],competitions});
  }
  if(path==='/api/participant/photo'&&request.method==='GET'){
   const account=await read(store,emailKey(user.email)),photo=account?.photoKey?await store.get(account.photoKey):null;
@@ -42,7 +42,9 @@ export async function participantRequest(request,env){
  if(path==='/api/participant/profile'&&request.method==='POST'){
   const body=await request.json(),name=String(body.name||'').trim(),mobile=String(body.mobile||'').trim();
   if(!name||name.length>100||!/^\+?[0-9 ()-]{7,20}$/.test(mobile))return reply({error:'Enter your name and a valid mobile number.'},400);
-  return store.lock(emailKey(user.email),async()=>{const account=await read(store,emailKey(user.email));if(!account||account.id!==user.id||account.disabled)return reply({error:'Please log in again.'},401);await save(store,emailKey(user.email),{...account,name,mobile});return reply({ok:true});});
+  const city=body.city===undefined?undefined:typeof body.city==='string'?body.city.trim():null,region=body.state===undefined?undefined:typeof body.state==='string'?body.state.trim():null;
+  if(city===null||region===null||(city?.length||0)>100||(region?.length||0)>100||body.interests!==undefined&&(!Array.isArray(body.interests)||body.interests.length>20||body.interests.some(n=>typeof n!=='string'||!n.trim()||n.length>50)))return reply({error:'Enter valid city, state and competition interests.'},400);
+  return store.lock(emailKey(user.email),async()=>{const account=await read(store,emailKey(user.email));if(!account||account.id!==user.id||account.disabled)return reply({error:'Please log in again.'},401);await save(store,emailKey(user.email),{...account,name,mobile,...(city!==undefined?{city}:{}),...(region!==undefined?{state:region}:{}),...(body.interests!==undefined?{interests:[...new Set(body.interests.map(n=>n.trim()))]}:{})});return reply({ok:true});});
  }
  if(path==='/api/participant/password'&&request.method==='POST'){
   const body=await request.json();if(typeof body.password!=='string'||body.password.length<4||body.password.length>20||typeof body.currentPassword!=='string'||body.currentPassword.length>20)return reply({error:'Use a password of 4–20 characters.'},400);
