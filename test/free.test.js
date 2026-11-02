@@ -10,7 +10,7 @@ test('free competitions save and accept submissions without payment credentials;
  const dir=await mkdtemp(join(tmpdir(),'compete-free-'));const store=new FileStore(dir);await store.init();await createAdmin(store,'owner@example.com','Owner-password-123');const server=await createAppServer(store,{});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
  t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await rm(dir,{recursive:true,force:true})});
  async function req(path,body,cookie){const multipart=body instanceof FormData;const r=await fetch(origin+path,{method:body?'POST':'GET',headers:{...(cookie?{Cookie:cookie}:{}),...(body?{Origin:origin,...(multipart?{}:{'Content-Type':'application/json'})}:{})},body:body?(multipart?body:JSON.stringify(body)):undefined});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
- const admin=await req('/api/auth/login',{email:'owner@example.com',password:'Owner-password-123'});const user=await req('/api/auth/register',{email:'artist@example.com',name:'Artist',password:'1234'});
+ const admin=await req('/api/auth/login',{email:'owner@example.com',password:'Owner-password-123'});const user=await req('/api/auth/register',{email:'artist@example.com',mobile:'9876543210',name:'Artist',password:'1234'});
  const c={title:'Free art',category:'Art',description:'Original work',rules:'Original images',fee:0,prizes:[0,0,0],deadline:'2099-12-31',status:'open'};
  const saved=await req('/api/admin/competition',c,admin.cookie);assert.equal(saved.status,200);c.id=saved.data.id;
  assert.equal((await req('/api/order',{competition:c.id},user.cookie)).data.free,true);

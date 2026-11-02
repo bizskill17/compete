@@ -39,8 +39,8 @@ test('Hostinger application: accounts, durable data, protected actions, captured
     return { status: r.status, data, cookie: r.headers.get('set-cookie')?.split(';')[0] };
   }
   const admin = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Owner-password-123' }); assert.equal(admin.status, 200);
-  const user = await request('/api/auth/register', { email: 'artist@example.com', password: 'Artist-password-123', name: 'Artist' }); assert.equal(user.status, 200); assert.match(user.cookie, /^compete_session=/);
-  assert.equal((await request('/api/auth/register', { email: config.ADMIN_EMAIL, password: 'Fake-password-123', name: 'Fake admin' })).status, 400);
+  const user = await request('/api/auth/register', { email: 'artist@example.com', password: 'Artist-password-123', mobile:'9876543210',name: 'Artist' }); assert.equal(user.status, 200); assert.match(user.cookie, /^compete_session=/);
+  assert.equal((await request('/api/auth/register', { email: config.ADMIN_EMAIL, password: 'Fake-password-123', mobile:'9876543210',name: 'Fake admin' })).status, 400);
   assert.equal((await request('/api/auth/login', { email: 'artist@example.com', password: 'Wrong-password-123' })).status, 401);
   assert.equal((await request('/api/state', null, user.cookie)).data.admin, false);
   assert.equal((await request('/api/state', null, admin.cookie)).data.admin, true);
@@ -56,7 +56,7 @@ test('Hostinger application: accounts, durable data, protected actions, captured
   assert.equal((await request('/api/order', { competition: c.id }, user.cookie)).data.id, 'order_test'); assert.equal(orderCount, 1, 'Unpaid order reused');
   assert.equal((await request('/api/admin/competition', { ...c, fee: 1 }, admin.cookie)).status, 409, 'Fee locked after orders start');
   assert.equal((await request('/api/verify', { razorpay_order_id: 'order_test', razorpay_payment_id: 'pay_test', razorpay_signature: 'fake' }, user.cookie)).status, 400);
-  const other = await request('/api/auth/register', { email: 'other@example.com', password: 'Other-password-123', name: 'Other' });
+  const other = await request('/api/auth/register', { email: 'other@example.com', password: 'Other-password-123', mobile:'9876543210',name: 'Other' });
   const sig = createHmac('sha256', config.RAZORPAY_KEY_SECRET).update('order_test|pay_test').digest('hex');
   assert.equal((await request('/api/verify', { razorpay_order_id: 'order_test', razorpay_payment_id: 'pay_test', razorpay_signature: sig }, other.cookie)).status, 400);
   captured = true; assert.equal((await request('/api/order', { competition: c.id }, user.cookie)).data.paid, true, 'Captured payment recovers without browser callback');
@@ -65,11 +65,16 @@ test('Hostinger application: accounts, durable data, protected actions, captured
   const submissions = await Promise.all([request('/api/submit', form(), user.cookie), request('/api/submit', form(), user.cookie)]);
   assert.deepEqual(submissions.map(s => s.status).sort(), [200, 409], 'Concurrent duplicate prevented');
   const entry = submissions.find(s => s.status === 200).data;
+  assert.equal((await request('/certificate/'+entry.id,null,user.cookie)).status,409);
+  await request('/api/admin/review',{id:entry.id,reviewStatus:'accepted'},admin.cookie);
   const certificate = await request('/certificate/' + entry.id, null, user.cookie); assert.equal(certificate.status, 200); assert.match(certificate.data, /&lt;script&gt;artist/); assert.doesNotMatch(certificate.data, /<script>artist/);
   assert.equal((await request('/certificate/' + entry.id, null, other.cookie)).status, 404);
-  assert.equal((await request('/api/judge', { id: entry.id }, other.cookie)).status, 404);
-  const judged = await request('/api/judge', { id: entry.id }, user.cookie); assert.equal(judged.data.score, 80);
-  assert.equal((await request('/api/judge', { id: entry.id }, user.cookie)).data.score, 80); assert.equal(judgeCount, 1);
+  assert.equal((await request('/api/judge', { id: entry.id }, other.cookie)).status, 403);
+  const judged = await request('/api/judge', { id: entry.id }, admin.cookie); assert.equal(judged.data.score, 80);
+  assert.equal((await request('/api/judge', { id: entry.id }, admin.cookie)).data.score, 80); assert.equal(judgeCount, 1);
+  assert.equal((await request('/api/leaderboard?id='+c.id)).data.length,0);
+  await request('/api/admin/competition',{...c,status:'closed'},admin.cookie);
+  assert.equal((await request('/api/admin/results',{id:c.id,publish:true},admin.cookie)).status,200);
   const board = await request('/api/leaderboard?id=' + c.id); assert.equal(board.data.length, 1); assert.equal(board.data[0].score, 80); assert.equal(board.data[0].uid, undefined);
   const restored = new FileStore(directory); await restored.init(); assert.equal((await (await restored.get('entry/' + entry.id)).json()).certificate, entry.certificate, 'Persistence survives store recreation');
   assert.equal((await request('/api/payments/webhook', { event: 'payment.captured' }, null, { 'x-razorpay-signature': 'bad' })).status, 400);

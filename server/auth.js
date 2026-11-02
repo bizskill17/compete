@@ -11,7 +11,7 @@ export async function hashPassword(password) {
   const hash = await scrypt(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
   return salt + ':' + hash.toString('hex');
 }
-async function matches(password, stored) {
+export async function matches(password, stored) {
   const [salt, encoded] = stored.split(':');
   const actual = await scrypt(password, salt, 64, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
   const expected = Buffer.from(encoded, 'hex');
@@ -54,6 +54,35 @@ export async function authenticate(store, config, path, body, cookie) {
     if (current) await store.delete(current.sessionKey);
     return { body: { ok: true }, cookie: 'compete_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0' + secure };
   }
+  if (path === '/api/auth/reset') {
+    if (typeof body.token !== 'string' || !/^[a-f0-9]{64}$/.test(body.token)) return {status:400,body:{error:'Invalid or expired reset link.'}};
+    if (typeof body.password !== 'string' || body.password.length<4 || body.password.length>20) return {status:400,body:{error:'Use a password of 4–20 characters.'}};
+    const key='reset/'+digest(body.token), reset=await read(store,key);
+    if(!reset)return {status:400,body:{error:'Invalid or expired reset link.'}};
+    return store.lock(reset.accountKey,async()=>{
+      const fresh=await read(store,key), account=await read(store,reset.accountKey);
+      if(!fresh||fresh.expires<Date.now()||!account||account.disabled||account.role==='admin'||account.id!==fresh.accountId||(account.authVersion||1)!==fresh.version)return {status:400,body:{error:'Invalid or expired reset link.'}};
+      await save(store,reset.accountKey,{...account,passwordHash:await hashPassword(body.password),authVersion:(account.authVersion||1)+1});
+      await store.delete(key);await store.delete('auth-rate/'+digest(account.email));return {body:{ok:true}};
+    });
+  }
+  if (path === '/api/auth/forgot') {
+    if(!config.RESEND_API_KEY||!config.EMAIL_FROM||!config.APP_URL)return {status:503,body:{error:'Password reset email is not configured yet. Contact the organizer.'}};
+    const email=normalize(body.email), message={message:'If an active participant account exists, a reset link will be emailed shortly.'};
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return {status:400,body:{error:'Enter a valid email address.'}};
+    return store.lock(emailKey(email),async()=>{
+      const key='reset-rate/'+digest(email), previous=await read(store,key);
+      if(previous?.until>Date.now())return {body:message};
+      await save(store,key,{until:Date.now()+60000});
+      const account=await read(store,emailKey(email));
+      if(account&&!account.disabled&&account.role!=='admin'){
+        const token=randomBytes(32).toString('hex'), resetKey='reset/'+digest(token);
+        await save(store,resetKey,{accountKey:emailKey(email),accountId:account.id,version:account.authVersion||1,expires:Date.now()+1800000});
+        try {const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+config.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:config.EMAIL_FROM,to:[email],subject:'Reset your Compete password',text:'Open this link to reset your password within 30 minutes: '+new URL('/reset-password?token='+token,config.APP_URL).href+'\nIf you did not request this, ignore this email.'})});if(!response.ok){await store.delete(resetKey);console.error('Password reset delivery failed');}}catch{await store.delete(resetKey);console.error('Password reset delivery failed');}
+      }
+      return {body:message};
+    });
+  }
   const email = normalize(body.email), password = body.password;
   if (typeof password !== 'string') return { status: 400, body: { error: 'Invalid credentials.' } };
   validate(email, password);
@@ -68,7 +97,9 @@ export async function authenticate(store, config, path, body, cookie) {
     if (path === '/api/auth/register') {
       const name = String(body.name || '').trim().slice(0, 100);
       if (!name || user || (config.ADMIN_EMAIL && email === normalize(config.ADMIN_EMAIL))) return { status: 400, body: { error: 'Unable to register this account. Try signing in or contact the organizer.' } };
-      user = { id: randomUUID(), email, name, passwordHash: await hashPassword(password), role: 'participant', authVersion: 1 };
+      const mobile=String(body.mobile||'').trim();
+      if(!/^\+?[0-9 ()-]{7,20}$/.test(mobile))return {status:400,body:{error:'Enter a valid mobile number.'}};
+      user = { id: randomUUID(), email, name, mobile, created:new Date().toISOString(), passwordHash: await hashPassword(password), role: 'participant', authVersion: 1 };
       await save(store, emailKey(email), user);
     } else {
       // Dummy derivation keeps unknown-account timing close to incorrect-password timing.

@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import app from './app.js';
+import { participantRequest } from './participant.js';
 import { adminRequest } from './admin.js';
 import { identity, authenticate } from './auth.js';
 const read = async (store, key) => (await store.get(key))?.json();
@@ -48,7 +49,7 @@ export async function createAppServer(store, config = {}) {
       }
       const bytes = Buffer.concat(chunks), cookie = incoming.headers.cookie || '';
       if (url.pathname.startsWith('/api/auth/')) {
-        if (method !== 'POST' || !['/api/auth/register', '/api/auth/login', '/api/auth/logout'].includes(url.pathname)) { send({ error: 'Not found' }, 404); return; }
+        if (method !== 'POST' || !['/api/auth/register', '/api/auth/login', '/api/auth/logout', '/api/auth/forgot', '/api/auth/reset'].includes(url.pathname)) { send({ error: 'Not found' }, 404); return; }
         let body; try { body = JSON.parse(bytes.toString() || '{}'); } catch { send({ error: 'Invalid JSON.' }, 400); return; }
         if (!body || typeof body !== 'object') { send({ error: 'Invalid request.' }, 400); return; }
         let result;
@@ -84,14 +85,10 @@ export async function createAppServer(store, config = {}) {
         if (!art) { send({ error: 'Image not found.' }, 404); return; }
         send(Buffer.from(await art.arrayBuffer()), 200, { 'content-type': art.httpMetadata.contentType, 'Content-Disposition': 'inline' }); return;
       }
-      const run = () => url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin/competition' ? adminRequest(request, environment) : app.fetch(request, environment);
+      const run = () => url.pathname.startsWith('/api/participant/') ? participantRequest(request, environment) : url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin/competition' ? adminRequest(request, environment) : app.fetch(request, environment);
       let response;
       if (method === 'POST' && url.pathname !== '/api/admin/generate') {
-        let key = 'competition-write';
-        if (url.pathname === '/api/judge' || url.pathname === '/api/admin/review') {
-          const body = JSON.parse(bytes); key = 'judge/' + String(body.id).slice(0, 150);
-        }
-        response = await store.lock(key, run);
+        response = await store.lock('competition-write', run);
       } else response = await run();
       send(Buffer.from(await response.arrayBuffer()), response.status, Object.fromEntries(response.headers));
     } catch (e) {

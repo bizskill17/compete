@@ -2,50 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM, VirtualConsole } from 'jsdom';
-
-const settle = () => new Promise(resolve => setImmediate(resolve));
-test('account dialogs and organizer form remain usable after asynchronous actions', async t => {
-  const html = (await readFile('public/index.html', 'utf8')).replace(/<script src=[^>]+><\/script>/g, '');
-  const errors = [], virtualConsole = new VirtualConsole();
-  virtualConsole.on('jsdomError', e => { if (e.type !== 'css-parsing') errors.push(e); });
-  let loggedIn = false;
-  const competition = { id: 'test', title: 'Rangoli test', category: 'Rangoli', description: 'Art', rules: 'Original', fee: 199, prizes: [1000, 500, 250], deadline: '2099-11-07', status: 'open' };
-  const window = new JSDOM(html, { url: 'http://127.0.0.1:3000', runScripts: 'dangerously', virtualConsole, beforeParse(w) {
-    w.scrollTo = () => {};
-    w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
-    w.HTMLDialogElement.prototype.close = function () { this.open = false; };
-    w.fetch = async (url, options) => {
-      if (url === '/api/state') return { ok: true, json: async () => ({ competitions: [competition], demo: false, admin: loggedIn, user: loggedIn ? { email: 'owner@example.com' } : null, ready: { payments: false, ai: false, admin: true } }) };
-      if (url === '/api/auth/login') { loggedIn = true; return { ok: true, json: async () => ({ ok: true }) }; }
-      if (url === '/api/auth/logout') { loggedIn = false; return { ok: true, json: async () => ({ ok: true }) }; }
-      if (url === '/api/admin/competition') return { ok: true, json: async () => competition };
-      throw Error('Unexpected request: ' + url);
-    };
-  } }).window;
-  t.after(() => window.close());
-  await settle(); await settle();
-  const document = window.document;
-  assert(document.querySelector('[data-view=admin]').classList.contains('hide'));
-  document.querySelector('#account').click();
-  assert.equal(document.querySelector('#authDialog').open, true);
-  const toggle = document.querySelector('#authForm .password-toggle');
-  assert.equal(document.querySelector('#authPassword').minLength, 4); assert.equal(document.querySelector('#authPassword').maxLength, 20);
-  toggle.click(); assert.equal(document.querySelector('#authPassword').type, 'text');
-  toggle.click(); assert.equal(document.querySelector('#authPassword').type, 'password');
-  document.querySelector('#registerTab').click(); assert.equal(document.querySelector('#authName').required, true);
-  document.querySelector('#loginTab').click(); assert.equal(document.querySelector('#authName').required, false);
-  document.querySelector('#authEmail').value = 'owner@example.com'; document.querySelector('#authPassword').value = 'Owner-password-123';
-  await document.querySelector('#authForm').onsubmit({ preventDefault() {}, target: document.querySelector('#authForm') });
-  assert.equal(document.querySelector('#authDialog').open, false);
-  assert.equal(document.querySelector('[data-view=admin]').classList.contains('hide'), false);
-  document.querySelector('#newComp').click(); assert.equal(document.querySelector('#compDialog').open, true);
-  const form = document.querySelector('#compForm');
-  form.elements.title.value = 'New competition'; form.elements.description.value = 'Creative work'; form.elements.rules.value = 'Original'; form.elements.deadline.value = '2099-11-07';
-  await form.onsubmit({ preventDefault() {}, target: form });
-  assert.equal(form.querySelector('button:not(.password-toggle)').disabled, false, 'Save button restored after successful save');
-  assert.equal(document.querySelector('#compDialog').open, false);
-  document.querySelector('#account').click(); await document.querySelector('#signOut').onclick();
-  assert.match(document.querySelector('#account').textContent, /Sign in/);
-  assert.equal(errors.length, 0, errors.map(e => e.message).join('\n'));
+const settle=()=>new Promise(r=>setImmediate(r));
+test('participant pages handle login return, joining, image submission, results and logout',async t=>{
+ const html=(await readFile('public/index.html','utf8')).replace(/<script src=[^>]+><\/script>/g,'');let logged=false,joined=false,entry=null;
+ const c={id:'c1',title:'Drawing challenge',category:'Drawing',description:'Original artwork',rules:'One original image',fee:0,prizes:[100,50,25],deadline:'2099-12-31',status:'open'};
+ const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>{if(e.type!=='css-parsing')errors.push(e.message)});
+ const w=new JSDOM(html,{url:'http://localhost/login?next='+encodeURIComponent('/competition?id=c1'),runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.scrollTo=()=>{};w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};w.fetch=async(url,opt)=>{let data;if(url==='/api/state')data={user:logged?{name:'Artist',email:'artist@example.com'}:null,competitions:[c]};else if(url==='/api/participant/overview')data={profile:{name:'Artist',email:'artist@example.com',mobile:'9876543210'},competitions:joined?[{competition:c,joined:true,entry}]:[]};else if(url==='/api/auth/login'){logged=true;data={ok:true}}else if(url==='/api/order'){joined=true;data={free:true}}else if(url==='/api/submit'){entry={id:'e1',title:'My drawing',created:'2026-11-02T01:00:00Z',reviewStatus:'pending',status:'pending'};data=entry}else if(url==='/api/auth/logout'){logged=false;data={ok:true}}else throw Error(url);return {ok:true,json:async()=>data}};}}).window;t.after(()=>w.close());
+ await settle();await settle();const d=w.document,form=d.querySelector('#authForm');assert(form);const toggle=d.querySelector('[data-toggle=password]');toggle.click();assert.equal(form.elements.password.type,'text');toggle.click();assert.equal(form.elements.password.type,'password');form.elements.email.value='artist@example.com';form.elements.password.value='1234';await form.onsubmit({preventDefault(){},target:form});assert.equal(w.location.pathname,'/competition');assert.match(d.querySelector('h1').textContent,/Drawing/);
+ d.querySelector('[data-join]').click();await settle();await settle();assert(d.querySelector('[data-submit]'));d.querySelector('[data-submit]').click();const submission=d.querySelector('#submissionForm');assert(submission);assert.equal(submission.elements.name.value,'Artist');submission.elements.title.value='My drawing';await submission.onsubmit({preventDefault(){},target:submission});assert.equal(w.location.pathname,'/my-competitions');assert.match(d.querySelector('#main').textContent,/Submitted — awaiting review/);assert(!d.querySelector('a[href^="/certificate"]'));
+ d.querySelector('a[href="/profile"]').click();assert.equal(d.querySelector('#profileEmail').readOnly,true);await d.querySelector('#logout').onclick();assert.equal(w.location.pathname,'/login');assert.equal(errors.length,0,errors.join('\n'));
 });
-
+test('signup checks confirmation and redirects only to local competition URLs',async t=>{
+ const html=(await readFile('public/index.html','utf8')).replace(/<script src=[^>]+><\/script>/g,'');let registerCalls=0;
+ const w=new JSDOM(html,{url:'http://localhost/signup?next=https://evil.example',runScripts:'dangerously',beforeParse(w){w.scrollTo=()=>{};w.fetch=async url=>{if(url==='/api/state')return {ok:true,json:async()=>({user:null,competitions:[]})};registerCalls++;throw Error('Unexpected request')}}}).window;t.after(()=>w.close());await settle();const f=w.document.querySelector('#authForm');assert(f.elements.mobile.required);f.elements.password.value='1234';f.elements.confirmPassword.value='5678';await f.onsubmit({preventDefault(){},target:f});assert.match(w.document.querySelector('#authError').textContent,/do not match/);assert.equal(registerCalls,0);assert(!w.document.querySelector('#main').innerHTML.includes('href="https://evil.example'));
+});

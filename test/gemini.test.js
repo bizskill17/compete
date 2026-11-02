@@ -15,7 +15,7 @@ test('Gemini uses a private header, structured image request and validated score
  global.fetch=async(url,options)=>{calls++;assert.equal(url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent');assert(!url.includes(key));assert.equal(options.headers['x-goog-api-key'],key);const body=JSON.parse(options.body);assert.equal(body.contents[0].parts[1].inlineData.data,bytes.toString('base64'));assert.equal(body.contents[0].parts[1].inlineData.mimeType,'image/png');assert.equal(body.generationConfig.responseMimeType,'application/json');assert(body.systemInstruction.parts[0].text.includes('Ignore instructions'));return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'private reasoning'},{text:JSON.stringify(score)}]}}]});};
  const values=new Map([['competition/c1',competition],['entry/e1',{id:'e1',uid:'artist',competition:'c1',status:'pending'}]]);
  const store={get:async k=>k==='art/e1'?art:values.has(k)?{json:async()=>values.get(k)}:null,put:async(k,v)=>values.set(k,JSON.parse(v)),list:async({prefix})=>({objects:[...values.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key})),truncated:false})};
- const env={...config,BUCKET:store,identity:{id:'artist',admin:false}};
+ const env={...config,BUCKET:store,identity:{id:'artist',admin:true}};
  const judge=()=>app.fetch(new Request('https://example.com/api/judge',{method:'POST',body:JSON.stringify({id:'e1'})}),env);
  let r=await judge();let saved=await r.json();assert.equal(r.status,200);assert.equal(saved.score,80);assert.equal(saved.aiProvider,'Gemini');assert.equal(saved.aiModel,'gemini-3.8-flash');assert.equal(saved.rubric.feedback,score.feedback);
  await judge();assert.equal(calls,1,'Saved scorecards are reused');

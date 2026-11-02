@@ -1,3 +1,4 @@
+import { publishResults } from './participant.js';
 import { generateCompetitionDraft } from './competition-ai.js';
 import { randomUUID } from 'node:crypto';
 import { aiProvider } from './judging.js';
@@ -36,6 +37,7 @@ export async function adminRequest(request, env) {
   }
   if (request.method !== 'POST') return reply({ error: 'Not found' }, 404);
   const body = await request.json();
+  if(path==='/api/admin/results')return publishResults(store,body);
   if (path === '/api/admin/generate') {
     if (body.kind === 'text' && body.id) {
       if (typeof body.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(body.id)) return reply({error:'Invalid competition.'},400);
@@ -58,6 +60,7 @@ export async function adminRequest(request, env) {
     if (kind === 'entry') {
       const entry = await read(store, 'entry/' + id);
       if (!entry) return reply({ error: 'Entry not found.' }, 404);
+      if((await read(store,'competition/'+entry.competition))?.resultsPublished)return reply({error:'Unpublish results before deleting an entry.'},409);
       await store.delete('art/' + entry.id);
       await store.delete('entry/' + entry.id);
       return reply({ ok: true });
@@ -135,6 +138,7 @@ export async function adminRequest(request, env) {
   if (path === '/api/admin/review') {
     const entry = await read(store, 'entry/' + String(body.id));
     if (!entry) return reply({ error: 'Entry not found.' }, 404);
+    if((await read(store,'competition/'+entry.competition))?.resultsPublished)return reply({error:'Unpublish results before changing a review.'},409);
     if (!['accepted', 'rejected'].includes(body.reviewStatus)) return reply({ error: 'Choose accept or reject.' }, 400);
     const reason = String(body.reason || '').trim().slice(0, 1000);
     if (body.reviewStatus === 'rejected' && !reason) return reply({ error: 'Enter a rejection reason.' }, 400);

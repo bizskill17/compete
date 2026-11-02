@@ -23,30 +23,30 @@ test('admin area authorizes every operation, manages categories and participants
   }
   assert.match((await request('/admin')).text, /Sign in to dashboard/);
   const owner = await request('/api/auth/login', { email: config.ADMIN_EMAIL, password: 'Admin-password-123' });
-  const participant = await request('/api/auth/register', { email: 'artist@example.com', name: 'Artist', password: 'Artist-password-123' });
+  const participant = await request('/api/auth/register', { email: 'artist@example.com', mobile:'9876543210',name: 'Artist', password: 'Artist-password-123' });
   for (const cookie of [undefined, participant.cookie]) {
     assert.equal((await request('/api/admin/overview', null, cookie)).status, 403);
     for (const path of ['category', 'participant', 'review', 'delete']) assert.equal((await request('/api/admin/' + path, {}, cookie)).status, 403);
     assert.equal((await request('/api/admin/art/missing', null, cookie)).status, 403);
   }
-  assert.equal((await request('/api/admin/category', { name: 'Art' }, owner.cookie, 'https://evil.example')).status, 403);
-  const category = await request('/api/admin/category', { name: 'Drawing', active: true }, owner.cookie);
+  assert.equal((await request('/api/admin/category', { mobile:'9876543210',name: 'Art' }, owner.cookie, 'https://evil.example')).status, 403);
+  const category = await request('/api/admin/category', { mobile:'9876543210',name: 'Drawing', active: true }, owner.cookie);
   assert.equal(category.status, 200);
-  assert.equal((await request('/api/admin/category', { name: 'drawing' }, owner.cookie)).status, 409);
+  assert.equal((await request('/api/admin/category', { mobile:'9876543210',name: 'drawing' }, owner.cookie)).status, 409);
   assert.equal((await request('/api/admin/category', { ...category.data, active: false }, owner.cookie)).data.active, false);
-  assert.equal((await request('/api/admin/participant', { name: 'Short', email: 'short@example.com', password: '123' }, owner.cookie)).status, 400);
-  assert.equal((await request('/api/admin/participant', { name: 'Long', email: 'long@example.com', password: 'x'.repeat(21) }, owner.cookie)).status, 400);
-  const newUser = await request('/api/admin/participant', { name: 'New artist', email: 'new@example.com', password: 'Artist-password-123', role: 'admin' }, owner.cookie);
+  assert.equal((await request('/api/admin/participant', { mobile:'9876543210',name: 'Short', email: 'short@example.com', password: '123' }, owner.cookie)).status, 400);
+  assert.equal((await request('/api/admin/participant', { mobile:'9876543210',name: 'Long', email: 'long@example.com', password: 'x'.repeat(21) }, owner.cookie)).status, 400);
+  const newUser = await request('/api/admin/participant', { mobile:'9876543210',name: 'New artist', email: 'new@example.com', password: 'Artist-password-123', role: 'admin' }, owner.cookie);
   assert.equal(newUser.status, 200); assert.equal(newUser.data.role, 'participant'); assert.equal(newUser.data.passwordHash, undefined);
-  assert.equal((await request('/api/admin/participant', { name: 'Copy', email: 'new@example.com', password: 'Artist-password-123' }, owner.cookie)).status, 409);
+  assert.equal((await request('/api/admin/participant', { mobile:'9876543210',name: 'Copy', email: 'new@example.com', password: 'Artist-password-123' }, owner.cookie)).status, 409);
   const login = await request('/api/auth/login', { email: 'new@example.com', password: 'Artist-password-123' });
   assert.equal((await request('/api/admin/participant', { ...newUser.data, disabled: true }, owner.cookie)).status, 200);
   assert.equal((await request('/api/state', null, login.cookie)).data.user, null);
   assert.equal((await request('/api/auth/login', { email: 'new@example.com', password: 'Artist-password-123' })).status, 401);
   const put = (key, value) => store.put(key, JSON.stringify(value));
   await put('competition/c1', { id: 'c1', title: 'Drawing contest', category: 'Drawing', status: 'open' });
-  assert.equal((await request('/api/admin/category', { ...category.data, name: 'Changed' }, owner.cookie)).status, 409);
-  await put('entry/e1', { id: 'e1', competition: 'c1', name: 'Artist', status: 'judged', score: 90, created: '2026-10-30T00:00:00Z' });
+  assert.equal((await request('/api/admin/category', { ...category.data, mobile:'9876543210',name: 'Changed' }, owner.cookie)).status, 409);
+  await put('entry/e1', { id: 'e1', competition: 'c1', mobile:'9876543210',name: 'Artist', status: 'judged', score: 90, created: '2026-10-30T00:00:00Z' });
   await store.put('art/e1', Buffer.from([1, 2, 3]), { httpMetadata: { contentType: 'image/png' } });
   assert.equal((await request('/api/admin/art/e1', null, owner.cookie)).status, 200);
   assert.equal((await request('/api/admin/review', { id: 'e1', reviewStatus: 'rejected' }, owner.cookie)).status, 400);
