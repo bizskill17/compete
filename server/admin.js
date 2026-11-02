@@ -57,7 +57,7 @@ export async function adminRequest(request, env) {
       if (entries.some(e => e.competition === id) || orders.some(o => o.competition === id)) return reply({ error: 'This competition has entries or payment orders. Close it instead.' }, 409);
       // Registration keys include the competition ID even when records have no orders.
       if ((await store.list({ prefix: 'registration/' + id + '/' })).objects.length) return reply({ error: 'This competition has registrations. Close it instead.' }, 409);
-      await store.delete('competition/' + id); return reply({ ok: true });
+      const competition = await read(store, 'competition/' + id); await store.delete('competition/' + id); if (competition.thumbnail) await store.delete(competition.thumbnail); return reply({ ok: true });
     }
     const account = (await list(store, 'account/')).find(a => a.id === id);
     if (!account) return reply({ error: 'Participant not found.' }, 404);

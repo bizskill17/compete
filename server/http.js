@@ -17,7 +17,7 @@ export async function createAppServer(store, config = {}) {
   const rate = new Map(); let inflight = 0;
   const server = createServer(async (incoming, outgoing) => {
     const send = (body, status = 200, headers = {}) => {
-      outgoing.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'same-origin', ...(production ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...headers });
+      outgoing.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', ...(production ? { 'strict-transport-security': 'max-age=31536000' } : {}), ...Object.fromEntries(Object.entries(headers).map(([key,value])=>[key.toLowerCase(),value])) });
       outgoing.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
     };
     if (inflight >= 30) { send({ error: 'The service is busy. Please retry shortly.' }, 503); return; }
@@ -26,7 +26,7 @@ export async function createAppServer(store, config = {}) {
       // Configured origin is authoritative; Host and forwarding headers never grant identity.
       const requestOrigin = origin || 'http://127.0.0.1:' + server.address().port;
       const url = new URL(incoming.url, requestOrigin), method = incoming.method;
-      if (['/admin', '/admin/'].includes(url.pathname) && method === 'GET') { send(adminPage, 200, { 'Content-Type': 'text/html; charset=utf-8' }); return; }
+      if (['/admin', '/admin/'].includes(url.pathname) && method === 'GET') { send(adminPage, 200, { 'content-type': 'text/html; charset=utf-8' }); return; }
       if (url.pathname === '/health' && method === 'GET') { send({ ok: true }); return; }
       if (!['GET', 'HEAD', 'POST'].includes(method)) { send({ error: 'Method not allowed' }, 405, { Allow: 'GET, HEAD, POST' }); return; }
       if (method === 'POST' && url.pathname !== webhookPath && incoming.headers.origin !== requestOrigin) { send({ error: 'Request origin does not match this website.' }, 403); return; }
@@ -38,7 +38,7 @@ export async function createAppServer(store, config = {}) {
         bucket.count++; rate.set(address, bucket);
         if (bucket.count > 60) { send({ error: 'Too many requests. Please retry later.' }, 429); return; }
       }
-      const maximum = url.pathname === '/api/submit' ? 6 * 1024 * 1024 : 128 * 1024;
+      const maximum = ['/api/submit', '/api/admin/competition'].includes(url.pathname) ? 8 * 1024 * 1024 : 128 * 1024;
       if (Number(incoming.headers['content-length']) > maximum) { send({ error: 'Request is too large.' }, 413); incoming.resume(); return; }
       const chunks = []; let length = 0;
       for await (const chunk of incoming) {
@@ -82,7 +82,7 @@ export async function createAppServer(store, config = {}) {
         const entry = await read(store, 'entry/' + decodeURIComponent(url.pathname.slice('/api/admin/art/'.length)));
         const art = entry && await store.get('art/' + entry.id);
         if (!art) { send({ error: 'Image not found.' }, 404); return; }
-        send(Buffer.from(await art.arrayBuffer()), 200, { 'Content-Type': art.httpMetadata.contentType, 'Content-Disposition': 'inline' }); return;
+        send(Buffer.from(await art.arrayBuffer()), 200, { 'content-type': art.httpMetadata.contentType, 'Content-Disposition': 'inline' }); return;
       }
       const run = () => url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin/competition' ? adminRequest(request, environment) : app.fetch(request, environment);
       let response;
