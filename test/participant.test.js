@@ -1,3 +1,4 @@
+import {passportForm} from './helpers/passport.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -21,6 +22,8 @@ test('participant journey protects registration, private entries, review, public
  const form=()=>{const f=new FormData();f.set('competition',c.id);f.set('name','Artist');f.set('title','My drawing');f.set('original','yes');f.set('image',new Blob([Buffer.from('iVBORw0KGgo=','base64')],{type:'image/png'}),'art.png');return f};
  assert.equal((await req('/api/submit',form(),user.cookie)).status,403);assert.equal((await req('/api/order',{competition:c.id},user.cookie)).data.joined,true);await req('/api/order',{competition:c.id},user.cookie);let mine=(await req('/api/participant/overview',null,user.cookie)).data;assert.equal(mine.competitions.length,1);assert.equal(mine.competitions[0].joined,true);assert.equal(mine.competitions[0].entry,null);
  assert.equal((await req('/api/admin/competition',{...c,fee:199},admin.cookie)).status,409);
+ assert.equal((await req('/api/submit',form(),user.cookie)).data.code,'PHOTO_REQUIRED');
+ assert.equal((await req('/api/participant/photo',passportForm(),user.cookie)).status,200);
  const e=(await req('/api/submit',form(),user.cookie)).data;assert(e.id);assert.equal((await req('/api/participant/art/'+e.id,null,other.cookie)).status,404);assert.equal((await req('/api/participant/art/'+e.id,null,user.cookie)).status,200);
  assert.equal((await req('/certificate/'+e.id,null,user.cookie)).status,409);assert.equal((await req('/api/judge',{id:e.id},user.cookie)).status,403);assert.equal((await req('/api/admin/results',{id:c.id,publish:true},user.cookie)).status,403);
  await store.put('entry/'+e.id,JSON.stringify({...e,status:'judged',score:85,feedback:'Balanced work',rubric:{private:'hidden'}}));

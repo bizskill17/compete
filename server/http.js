@@ -39,7 +39,7 @@ export async function createAppServer(store, config = {}) {
         bucket.count++; rate.set(address, bucket);
         if (bucket.count > 60) { send({ error: 'Too many requests. Please retry later.' }, 429); return; }
       }
-      const maximum = ['/api/submit', '/api/admin/competition'].includes(url.pathname) ? 8 * 1024 * 1024 : 128 * 1024;
+      const maximum = ['/api/submit', '/api/admin/competition'].includes(url.pathname) ? 8 * 1024 * 1024 : ['/api/participant/photo', '/api/auth/register'].includes(url.pathname) ? 3 * 1024 * 1024 : 128 * 1024;
       if (Number(incoming.headers['content-length']) > maximum) { send({ error: 'Request is too large.' }, 413); incoming.resume(); return; }
       const chunks = []; let length = 0;
       for await (const chunk of incoming) {

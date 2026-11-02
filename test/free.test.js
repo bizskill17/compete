@@ -1,3 +1,4 @@
+import {passportForm} from './helpers/passport.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -15,6 +16,7 @@ test('free competitions save and accept submissions without payment credentials;
  const saved=await req('/api/admin/competition',c,admin.cookie);assert.equal(saved.status,200);c.id=saved.data.id;
  assert.equal((await req('/api/order',{competition:c.id},user.cookie)).data.free,true);
  const form=()=>{const f=new FormData();f.set('competition',c.id);f.set('name','Artist');f.set('title','Free entry');f.set('original','yes');f.set('image',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM1kAAAAASUVORK5CYII=','base64')],{type:'image/png'}),'art.png');return f;};
+ assert.equal((await req('/api/participant/photo',passportForm(),user.cookie)).status,200);
  const entry=await req('/api/submit',form(),user.cookie);assert.equal(entry.status,200);assert(entry.data.certificate);
  assert.equal((await req('/api/submit',form(),user.cookie)).status,409);
  assert.equal((await req('/api/admin/competition',{...c,fee:100},admin.cookie)).status,409);

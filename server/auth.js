@@ -1,3 +1,4 @@
+import { decodePassport, savePassport } from './passport.js';
 import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 const scrypt = promisify(scryptCallback);
@@ -100,6 +101,7 @@ export async function authenticate(store, config, path, body, cookie) {
       const mobile=String(body.mobile||'').trim();
       if(!/^\+?[0-9 ()-]{7,20}$/.test(mobile))return {status:400,body:{error:'Enter a valid mobile number.'}};
       user = { id: randomUUID(), email, name, mobile, created:new Date().toISOString(), passwordHash: await hashPassword(password), role: 'participant', authVersion: 1 };
+      if(body.photoUpload){let photo;try{photo=decodePassport(body.photoUpload);}catch(e){return {status:400,body:{error:e.message}};}user=await savePassport(store,user,photo.bytes,photo.type);}
       await save(store, emailKey(email), user);
     } else {
       // Dummy derivation keeps unknown-account timing close to incorrect-password timing.

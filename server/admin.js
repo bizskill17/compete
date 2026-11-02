@@ -14,10 +14,16 @@ async function list(store, prefix) {
   return result.filter(Boolean);
 }
 const reply = (body, status = 200) => Response.json(body, { status });
-const cleanUser = ({ id, name, email, role, disabled, created }) => ({ id, name, email, role, disabled: !!disabled, created });
+const cleanUser = ({ id, name, email, role, disabled, created, photoKey, photoUpdatedAt }) => ({ id, name, email, role, disabled: !!disabled, created, photo:!!photoKey, photoUpdatedAt:photoUpdatedAt||'' });
 export async function adminRequest(request, env) {
   if (!env.identity?.admin) return reply({ error: 'Administrator access required.' }, 403);
   const path = new URL(request.url).pathname, store = env.BUCKET;
+  if(path.startsWith('/api/admin/participant-photo/')&&request.method==='GET'){
+    const id=path.slice('/api/admin/participant-photo/'.length);if(!/^[a-zA-Z0-9-]{1,80}$/.test(id))return reply({error:'Photo not found.'},404);
+    const account=(await list(store,'account/')).find(a=>a.id===id),photo=account?.photoKey?await store.get(account.photoKey):null;
+    if(!photo)return reply({error:'Photo not found.'},404);
+    return new Response(await photo.arrayBuffer(),{headers:{'Content-Type':photo.httpMetadata.contentType,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+  }
   if (path === '/api/admin/overview' && request.method === 'GET') {
     const [competitions, categories, accounts, entries, registrations] = await Promise.all(
       ['competition/', 'category/', 'account/', 'entry/', 'registration/'].map(p => list(store, p)));
@@ -102,7 +108,7 @@ export async function adminRequest(request, env) {
         }
         cursor = page.truncated ? page.cursor : undefined;
       } while (cursor);
-      await store.delete(key);
+      await store.delete(key);if(current.photoKey)await store.delete(current.photoKey);
       return reply({ ok: true });
     });
   }

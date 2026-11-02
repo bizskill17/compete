@@ -38,3 +38,12 @@ Reference: https://resend.com/docs/api-reference/emails/send-email
 ## Verification
 
 Automated tests exercise a complete free competition journey, paid capture recovery, duplicate submission prevention, owner-only images, publication gating, winner certificates, profile changes, password changes and single-use reset links. Provider calls are mocked; testing does not send email, charge payments or assess production entries.
+
+
+## Passport-size participant photos
+
+Sign Up offers an optional passport photo. My profile has Upload / Replace / Remove controls and a preview. Choose JPG, PNG or WebP up to 2 MB, at least 150 × 200 pixels (up to 24 megapixels in the browser), then adjust zoom and position within a 3:4 crop. The browser exports a 480 × 640 JPEG, discarding the original image's metadata. Choose Use this photo to save it immediately in My profile, or include it with the signup form. Cancelling a crop preserves the previous photo. Replacing/removing the photo deletes the old stored image. Participant account deletion also deletes its photo.
+
+A photo is optional for account creation and joining a competition, but required before a new competition entry can be submitted. Existing entries and certificates remain available without a new photo. Participants without a photo are directed to My profile; they can return to My competitions afterwards. Photo removal doesn't delete previously submitted entries or certificates; it prevents further submissions until another photo is uploaded.
+
+Dashboard shows the photo beside the participant's name. Admin → Participants shows a small photo that opens a larger preview. Photo URLs require a signed-in owner or an administrator and are sent with private/no-store caching. Photos and internal storage keys are not exposed on public competition cards, leaderboards, or certificates. No automatic identity or face verification is performed. Images are stored in the existing persistent store, so they survive deployments without a schema migration.

@@ -1,3 +1,4 @@
+import { validatePassport, savePassport } from './passport.js';
 import { emailKey, hashPassword, matches } from './auth.js';
 export const read = async (store,key)=>(await store.get(key))?.json();
 export const save = (store,key,value)=>store.put(key,JSON.stringify(value));
@@ -17,7 +18,20 @@ export async function participantRequest(request,env){
   const registrations=(await records(store,'registration/')).filter(r=>r.key.endsWith('/'+user.id));
   const ids=new Set([...registrations.map(r=>r.key.split('/')[1]),...entries.map(e=>e.competition)]);
   const competitions=[...ids].map(id=>{const c=all.find(c=>c.id===id);if(!c)return null;const reg=registrations.find(r=>r.key==='registration/'+id+'/'+user.id)?.value,entry=entries.find(e=>e.competition===id);return {competition:{id:c.id,title:c.title,category:c.category,deadline:c.deadline,status:c.status,fee:c.fee,thumbnail:!!c.thumbnail,resultsPublished:!!c.resultsPublished},joined:!!entry||reg?.paid===true||reg?.joined===true,paymentPending:!!reg?.order&&!reg?.paid&&!entry,entry:entry?publicEntry(entry,c):null};}).filter(Boolean);
-  return reply({profile:{name:account.name,email:account.email,mobile:account.mobile||''},competitions});
+  return reply({profile:{name:account.name,email:account.email,mobile:account.mobile||'',photo:!!account.photoKey,photoUpdatedAt:account.photoUpdatedAt||''},competitions});
+ }
+ if(path==='/api/participant/photo'&&request.method==='GET'){
+  const account=await read(store,emailKey(user.email)),photo=account?.photoKey?await store.get(account.photoKey):null;
+  if(!photo)return reply({error:'Passport photo not found.'},404);
+  return new Response(await photo.arrayBuffer(),{headers:{'Content-Type':photo.httpMetadata.contentType,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+ }
+ if(path==='/api/participant/photo'&&request.method==='POST'){
+  let bytes,type,remove=false;
+  if(request.headers.get('content-type')?.startsWith('application/json')){const body=await request.json();if(body.remove!==true)return reply({error:'Choose a passport photo.'},400);remove=true;}
+  else{const form=await request.formData(),image=form.get('photo');if(!image||typeof image.arrayBuffer!=='function')return reply({error:'Choose a passport photo.'},400);try{type=image.type;bytes=validatePassport(await image.arrayBuffer(),type);}catch(e){return reply({error:e.message},400);}}
+  return store.lock(emailKey(user.email),async()=>{const account=await read(store,emailKey(user.email));if(!account||account.id!==user.id||account.disabled)return reply({error:'Please log in again.'},401);
+   const updated=remove?{...account,photoKey:null,photoUpdatedAt:null}:await savePassport(store,account,bytes,type);
+   await save(store,emailKey(user.email),updated);if(account.photoKey)await store.delete(account.photoKey);return reply({ok:true});});
  }
  if(path.startsWith('/api/participant/art/')&&request.method==='GET'){
   const id=decodeURIComponent(path.slice('/api/participant/art/'.length));const entry=await read(store,'entry/'+id);

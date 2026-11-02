@@ -1,3 +1,4 @@
+import {passportForm} from './helpers/passport.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -62,6 +63,7 @@ test('Hostinger application: accounts, durable data, protected actions, captured
   captured = true; assert.equal((await request('/api/order', { competition: c.id }, user.cookie)).data.paid, true, 'Captured payment recovers without browser callback');
   const form = () => { const f = new FormData(); f.set('competition', c.id); f.set('name', '<script>artist</script>'); f.set('title', 'Floral light'); f.set('original', 'yes'); f.set('image', new Blob([new Uint8Array([137,80,78,71,13,10,26,10,0])], { type: 'image/png' }), 'art.png'); return f; };
   assert.equal((await request('/api/submit', form(), other.cookie)).status, 403);
+  assert.equal((await request('/api/participant/photo',passportForm(),user.cookie)).status,200);
   const submissions = await Promise.all([request('/api/submit', form(), user.cookie), request('/api/submit', form(), user.cookie)]);
   assert.deepEqual(submissions.map(s => s.status).sort(), [200, 409], 'Concurrent duplicate prevented');
   const entry = submissions.find(s => s.status === 200).data;
