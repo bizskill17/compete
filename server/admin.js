@@ -25,8 +25,8 @@ export async function adminRequest(request, env) {
     return new Response(await photo.arrayBuffer(),{headers:{'Content-Type':photo.httpMetadata.contentType,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
   }
   if (path === '/api/admin/overview' && request.method === 'GET') {
-    const [competitions, categories, accounts, entries, registrations] = await Promise.all(
-      ['competition/', 'category/', 'account/', 'entry/', 'registration/'].map(p => list(store, p)));
+    const [competitions, categories, accounts, entries, registrations, storedBranding] = await Promise.all([
+      ...['competition/', 'category/', 'account/', 'entry/', 'registration/'].map(p => list(store, p)), read(store,'settings/branding')]);
     const users = new Map(accounts.map(a => [a.id, a]));
     // Older order objects store their ID only in the storage key.
     const keyedPayments = []; let cursor;
@@ -36,13 +36,29 @@ export async function adminRequest(request, env) {
         keyedPayments.push({ id, competition: o.competition, amount: o.amount, email: users.get(o.uid)?.email || '', paid: !!reg?.paid, payment: reg?.payment || '' }); }
       cursor = page.truncated ? page.cursor : undefined;
     } while (cursor);
-    return reply({ competitions, categories, participants: accounts.map(cleanUser), entries, payments: keyedPayments,
+    return reply({ competitions, categories, participants: accounts.map(cleanUser), entries, payments: keyedPayments, branding: storedBranding||{name:'compete.',logo:false,updatedAt:''},
       ready: { payments: !!(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET), ai: !!aiProvider(env), aiProvider: aiProvider(env), webhook: !!env.RAZORPAY_WEBHOOK_SECRET, database: !!env.DB_NAME },
       stats: { participants: accounts.filter(a => a.role !== 'admin').length, active: competitions.filter(c => c.status === 'open').length,
         pending: entries.filter(e => !e.reviewStatus).length, collected: keyedPayments.filter(p => p.paid).reduce((sum, p) => sum + p.amount, 0) } });
   }
   if (request.method !== 'POST') return reply({ error: 'Not found' }, 404);
   const body = await request.json();
+  if(path==='/api/admin/branding'){
+    const name=String(body.name||'').trim();
+    if(!name||name.length>60)return reply({error:'Enter a website name of 1–60 characters.'},400);
+    let prior=await read(store,'settings/branding')||{name:'compete.',logo:false,updatedAt:''},logo=prior.logo===true;
+    if(body.logo!==undefined){
+      if(body.logo===null){await store.delete('branding/logo');logo=false;}
+      else{
+        const upload=body.logo;
+        if(!upload||typeof upload.data!=='string'||upload.data.length>6990510||!['image/jpeg','image/png','image/webp','image/svg+xml'].includes(upload.type)||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(upload.data))return reply({error:'Select a PNG, JPG, WebP or SVG logo up to 5 MB.'},400);
+        const bytes=Buffer.from(upload.data,'base64');
+        if(!bytes.length||bytes.length>5*1024*1024)return reply({error:'Select a logo up to 5 MB.'},400);
+        await store.put('branding/logo',bytes,{httpMetadata:{contentType:upload.type}});logo=true;
+      }
+    }
+    const branding={name,logo,updatedAt:new Date().toISOString()};await save(store,'settings/branding',branding);return reply(branding);
+  }
   if(path==='/api/admin/results')return publishResults(store,body);
   if (path === '/api/admin/generate') {
     if (body.kind === 'text' && body.id) {
