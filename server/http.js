@@ -86,7 +86,7 @@ export async function createAppServer(store, config = {}) {
       }
       const run = () => url.pathname.startsWith('/api/admin/') && url.pathname !== '/api/admin/competition' ? adminRequest(request, environment) : app.fetch(request, environment);
       let response;
-      if (method === 'POST') {
+      if (method === 'POST' && url.pathname !== '/api/admin/generate') {
         let key = 'competition-write';
         if (url.pathname === '/api/judge' || url.pathname === '/api/admin/review') {
           const body = JSON.parse(bytes); key = 'judge/' + String(body.id).slice(0, 150);

@@ -20,3 +20,13 @@ Official references:
 - https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
 
 Validation uses mocked provider responses. Live account credentials, quota, model access and target-host network connectivity must be verified after deployment.
+
+
+## Competition drafting assistant
+
+Admin → Competitions → Create/Edit includes editable AI description and rules, and three separately generated thumbnail options. For new competitions, generation starts after the name and category are filled and the name field loses focus. Existing records require an explicit Generate action. Only Save competition persists the chosen thumbnail and text. Manual text changed during a request is preserved. Existing entry/order locks remain in force.
+
+Uses the existing private `GEMINI_API_KEY`. Text uses `GEMINI_MODEL` (default `gemini-3.8-flash`); images use `GEMINI_IMAGE_MODEL` (default `gemini-nano-banana-2.1`). The key's Google project must have access, billing and quota for image generation. No key belongs in browser code or GitHub. Provider failures show safe messages and leave manual upload/editing available. Each set makes three image calls plus one text call; regeneration consumes quota. The admin-only endpoint limits each administrator to twelve generation calls per minute. Generated choices are not stored until selected and saved.
+
+API reference: https://ai.google.dev/gemini-api/docs/generate-content/image-generation
+

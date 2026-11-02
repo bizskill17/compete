@@ -1,3 +1,4 @@
+import { generateCompetitionDraft } from './competition-ai.js';
 import { randomUUID } from 'node:crypto';
 import { aiProvider } from './judging.js';
 import { emailKey, hashPassword } from './auth.js';
@@ -35,6 +36,22 @@ export async function adminRequest(request, env) {
   }
   if (request.method !== 'POST') return reply({ error: 'Not found' }, 404);
   const body = await request.json();
+  if (path === '/api/admin/generate') {
+    if (body.kind === 'text' && body.id) {
+      if (typeof body.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(body.id)) return reply({error:'Invalid competition.'},400);
+      const competitions = await list(store, 'competition/');
+      if (!competitions.some(c=>c.id===body.id)) return reply({error:'Competition not found.'},404);
+      if ((await list(store,'entry/')).some(e=>e.competition===body.id) || (await list(store,'order/')).some(o=>o.competition===body.id)) return reply({error:'Rules and description are locked because entries or orders exist.'},409);
+    }
+    // Durable per-admin limit; only the quota gate is locked, not provider calls.
+    const allowed = await store.lock('ai-quota/'+env.identity.id, async()=>{
+      const key='ai-quota/'+env.identity.id, now=Date.now();
+      let quota=await read(store,key); if(!quota || quota.until<now) quota={until:now+60000,count:0};
+      if(quota.count>=12)return false; quota.count++;await save(store,key,quota);return true;
+    });
+    if(!allowed)return reply({error:'Please wait a minute before generating more AI drafts.'},429);
+    try { return reply(await generateCompetitionDraft(env,body)); } catch(error) { return reply({error:error.message},error.status||503); }
+  }
   if (path === '/api/admin/delete') {
     const { kind, id } = body;
     if (!['category', 'competition', 'participant', 'entry'].includes(kind) || typeof id !== 'string' || id.length > 200 || !/^[a-zA-Z0-9_-]+$/.test(id)) return reply({ error: 'Invalid delete request.' }, 400);
