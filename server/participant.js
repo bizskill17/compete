@@ -43,8 +43,8 @@ export async function participantRequest(request,env){
   const body=await request.json(),name=String(body.name||'').trim(),mobile=String(body.mobile||'').trim();
   if(!name||name.length>100||!/^\+?[0-9 ()-]{7,20}$/.test(mobile))return reply({error:'Enter your name and a valid mobile number.'},400);
   const city=body.city===undefined?undefined:typeof body.city==='string'?body.city.trim():null,region=body.state===undefined?undefined:typeof body.state==='string'?body.state.trim():null;
-  if(city===null||region===null||(city?.length||0)>100||(region?.length||0)>100||body.interests!==undefined&&(!Array.isArray(body.interests)||body.interests.length>20||body.interests.some(n=>typeof n!=='string'||!n.trim()||n.length>50)))return reply({error:'Enter valid city, state and competition interests.'},400);
-  return store.lock(emailKey(user.email),async()=>{const account=await read(store,emailKey(user.email));if(!account||account.id!==user.id||account.disabled)return reply({error:'Please log in again.'},401);await save(store,emailKey(user.email),{...account,name,mobile,...(city!==undefined?{city}:{}),...(region!==undefined?{state:region}:{}),...(body.interests!==undefined?{interests:[...new Set(body.interests.map(n=>n.trim()))]}:{})});return reply({ok:true});});
+  if(city===null||region===null||(city?.length||0)>100||(region?.length||0)>100||(!user.admin&&(!city||!region)))return reply({error:'Enter your city and state.'},400);
+  return store.lock(emailKey(user.email),async()=>{const account=await read(store,emailKey(user.email));if(!account||account.id!==user.id||account.disabled)return reply({error:'Please log in again.'},401);await save(store,emailKey(user.email),{...account,name,mobile,...(city!==undefined?{city}:{}),...(region!==undefined?{state:region}:{})});return reply({ok:true});});
  }
  if(path==='/api/participant/password'&&request.method==='POST'){
   const body=await request.json();if(typeof body.password!=='string'||body.password.length<4||body.password.length>20||typeof body.currentPassword!=='string'||body.currentPassword.length>20)return reply({error:'Use a password of 4–20 characters.'},400);
