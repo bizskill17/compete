@@ -163,7 +163,7 @@ export async function adminRequest(request, env) {
     if((await read(store,'competition/'+entry.competition))?.resultsPublished)return reply({error:'Unpublish results before changing a review.'},409);
     if (!['accepted', 'rejected'].includes(body.reviewStatus)) return reply({ error: 'Choose accept or reject.' }, 400);
     const reason = String(body.reason || '').trim().slice(0, 1000);
-    if (body.reviewStatus === 'rejected' && !reason) return reply({ error: 'Enter a rejection reason.' }, 400);
+    if (!reason) return reply({ error: 'Enter a reason.' }, 400);
     let updated = { ...entry, reviewStatus: body.reviewStatus, reviewReason: reason, reviewedAt: new Date().toISOString() };
     await save(store, 'entry/' + entry.id, updated);
     if (body.reviewStatus === 'accepted' && updated.status !== 'judged' && updated.status !== 'review') {
