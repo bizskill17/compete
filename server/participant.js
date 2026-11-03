@@ -20,6 +20,18 @@ export async function participantRequest(request,env){
   const competitions=[...ids].map(id=>{const c=all.find(c=>c.id===id);if(!c)return null;const reg=registrations.find(r=>r.key==='registration/'+id+'/'+user.id)?.value,entry=entries.find(e=>e.competition===id);return {competition:{id:c.id,title:c.title,category:c.category,deadline:c.deadline,status:c.status,fee:c.fee,thumbnail:!!c.thumbnail,resultsPublished:!!c.resultsPublished},joined:!!entry||reg?.paid===true||reg?.joined===true,paymentPending:!!reg?.order&&!reg?.paid&&!entry,entry:entry?publicEntry(entry,c):null};}).filter(Boolean);
   return reply({profile:{name:account.name,email:account.email,mobile:account.mobile||'',photo:!!account.photoKey,photoUpdatedAt:account.photoUpdatedAt||'',city:account.city||'',state:account.state||'',interests:account.interests||[]},interestOptions:[...new Set([...(await records(store,'category/')).filter(r=>r.value.active).map(r=>r.value.name),...all.filter(c=>c.status!=='draft').map(c=>c.category)])],competitions});
  }
+ if(path==='/api/participant/leave'&&request.method==='POST'){
+  const body=await request.json(),competition=String(body.competition||'');
+  if(!/^[a-zA-Z0-9-]{1,80}$/.test(competition))return reply({error:'Invalid competition.'},400);
+  const key='registration/'+competition+'/'+user.id;
+  return store.lock(key,async()=>{
+   const [registration,entry]=await Promise.all([read(store,key),read(store,'entry/'+competition+'_'+user.id)]);
+   if(entry)return reply({error:'A submitted entry cannot be removed.'},409);
+   if(!registration?.joined||registration.paid||registration.order)return reply({error:'Only unpaid free competitions can be left.'},409);
+   await store.delete(key);
+   return reply({ok:true});
+  });
+ }
  if(path==='/api/participant/photo'&&request.method==='GET'){
   const account=await read(store,emailKey(user.email)),photo=account?.photoKey?await store.get(account.photoKey):null;
   if(!photo)return reply({error:'Passport photo not found.'},404);
