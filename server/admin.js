@@ -167,13 +167,13 @@ export async function adminRequest(request, env) {
     let updated = { ...entry, reviewStatus: body.reviewStatus, reviewReason: reason, reviewedAt: new Date().toISOString() };
     await save(store, 'entry/' + entry.id, updated);
     if (body.reviewStatus === 'accepted' && updated.status !== 'judged' && updated.status !== 'review') {
-      if (!aiProvider(env)) return reply({ error: 'AI judging is not configured yet. The review was saved.' }, 503);
+      if (!aiProvider(env)) return reply({ ...updated, aiJudgingPending: true, aiJudgingError: 'AI judging is not configured yet.' });
       const competition = await read(store, 'competition/' + updated.competition);
       const art = await store.get('art/' + updated.id);
       if (!competition || !art) return reply({ error: 'Unable to find the competition or entry image for AI judging.' }, 404);
       let assessment;
       try { assessment = await judgeArtwork(env, competition, art); }
-      catch (error) { return reply({ error: error.message }, error.status || 503); }
+      catch (error) { return reply({ ...updated, aiJudgingPending: true, aiJudgingError: error.message }); }
       const result = assessment.result;
       const keys = ['creativity', 'composition', 'craftsmanship', 'theme'];
       updated = {
