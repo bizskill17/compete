@@ -62,7 +62,7 @@ export async function authenticate(store, config, path, body, cookie) {
     if(!reset)return {status:400,body:{error:'Invalid or expired reset link.'}};
     return store.lock(reset.accountKey,async()=>{
       const fresh=await read(store,key), account=await read(store,reset.accountKey);
-      if(!fresh||fresh.expires<Date.now()||!account||account.disabled||account.role==='admin'||account.id!==fresh.accountId||(account.authVersion||1)!==fresh.version)return {status:400,body:{error:'Invalid or expired reset link.'}};
+      if(!fresh||fresh.expires<Date.now()||!account||account.disabled||account.id!==fresh.accountId||(account.authVersion||1)!==fresh.version)return {status:400,body:{error:'Invalid or expired reset link.'}};
       await save(store,reset.accountKey,{...account,passwordHash:await hashPassword(body.password),authVersion:(account.authVersion||1)+1});
       await store.delete(key);await store.delete('auth-rate/'+digest(account.email));return {body:{ok:true}};
     });
@@ -76,10 +76,10 @@ export async function authenticate(store, config, path, body, cookie) {
       if(previous?.until>Date.now())return {body:message};
       await save(store,key,{until:Date.now()+60000});
       const account=await read(store,emailKey(email));
-      if(account&&!account.disabled&&account.role!=='admin'){
+      if(account&&!account.disabled){
         const token=randomBytes(32).toString('hex'), resetKey='reset/'+digest(token);
         await save(store,resetKey,{accountKey:emailKey(email),accountId:account.id,version:account.authVersion||1,expires:Date.now()+1800000});
-        try {const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+config.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:config.EMAIL_FROM,to:[email],subject:'Reset your Compete password',text:'Open this link to reset your password within 30 minutes: '+new URL('/reset-password?token='+token,config.APP_URL).href+'\nIf you did not request this, ignore this email.'})});if(!response.ok){await store.delete(resetKey);console.error('Password reset delivery failed');}}catch{await store.delete(resetKey);console.error('Password reset delivery failed');}
+        try {const response=await fetch('https://api.resend.com/emails',{method:'POST',signal:AbortSignal.timeout(15000),headers:{Authorization:'Bearer '+config.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:config.EMAIL_FROM,to:[email],subject:'Reset your password',text:'Open this link to reset your password within 30 minutes: '+new URL('/reset-password?token='+token,config.APP_URL).href+'\nIf you did not request this, ignore this email.'})});if(!response.ok){await store.delete(resetKey);console.error('Password reset delivery failed');}}catch{await store.delete(resetKey);console.error('Password reset delivery failed');}
       }
       return {body:message};
     });
