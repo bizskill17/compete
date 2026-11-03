@@ -1,7 +1,7 @@
 import { publishResults } from './participant.js';
 import { generateCompetitionDraft } from './competition-ai.js';
 import { randomUUID } from 'node:crypto';
-import { aiProvider } from './judging.js';
+import { aiProvider, judgeArtwork } from './judging.js';
 import { emailKey, hashPassword } from './auth.js';
 const read = async (store, key) => (await store.get(key))?.json();
 const save = (store, key, value) => store.put(key, JSON.stringify(value));
@@ -164,8 +164,31 @@ export async function adminRequest(request, env) {
     if (!['accepted', 'rejected'].includes(body.reviewStatus)) return reply({ error: 'Choose accept or reject.' }, 400);
     const reason = String(body.reason || '').trim().slice(0, 1000);
     if (body.reviewStatus === 'rejected' && !reason) return reply({ error: 'Enter a rejection reason.' }, 400);
-    const updated = { ...entry, reviewStatus: body.reviewStatus, reviewReason: reason, reviewedAt: new Date().toISOString() };
-    await save(store, 'entry/' + entry.id, updated); return reply(updated);
+    let updated = { ...entry, reviewStatus: body.reviewStatus, reviewReason: reason, reviewedAt: new Date().toISOString() };
+    await save(store, 'entry/' + entry.id, updated);
+    if (body.reviewStatus === 'accepted' && updated.status !== 'judged' && updated.status !== 'review') {
+      if (!aiProvider(env)) return reply({ error: 'AI judging is not configured yet. The review was saved.' }, 503);
+      const competition = await read(store, 'competition/' + updated.competition);
+      const art = await store.get('art/' + updated.id);
+      if (!competition || !art) return reply({ error: 'Unable to find the competition or entry image for AI judging.' }, 404);
+      let assessment;
+      try { assessment = await judgeArtwork(env, competition, art); }
+      catch (error) { return reply({ error: error.message }, error.status || 503); }
+      const result = assessment.result;
+      const keys = ['creativity', 'composition', 'craftsmanship', 'theme'];
+      updated = {
+        ...updated,
+        status: result.eligible ? 'judged' : 'review',
+        score: keys.reduce((total, key) => total + Number(result[key] || 0), 0),
+        feedback: String(result.feedback || '').slice(0, 2000),
+        rubric: result,
+        aiProvider: assessment.provider,
+        aiModel: assessment.model,
+        judgedAt: new Date().toISOString()
+      };
+      await save(store, 'entry/' + updated.id, updated);
+    }
+    return reply(updated);
   }
   return reply({ error: 'Not found' }, 404);
 }
