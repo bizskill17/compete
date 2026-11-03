@@ -99,7 +99,7 @@ export async function authenticate(store, config, path, body, cookie) {
       const name = String(body.name || '').trim().slice(0, 100);
       if (!name || user || (config.ADMIN_EMAIL && email === normalize(config.ADMIN_EMAIL))) return { status: 400, body: { error: 'Unable to register this account. Try signing in or contact the organizer.' } };
       const mobile=String(body.mobile||'').trim();
-      if(!/^\+?[0-9 ()-]{7,20}$/.test(mobile))return {status:400,body:{error:'Enter a valid mobile number.'}};
+      if(!/^\d{10}$/.test(mobile))return {status:400,body:{error:'Enter a valid 10-digit mobile number.'}};
       user = { id: randomUUID(), email, name, mobile, created:new Date().toISOString(), passwordHash: await hashPassword(password), role: 'participant', authVersion: 1 };
       if(body.photoUpload){let photo;try{photo=decodePassport(body.photoUpload);}catch(e){return {status:400,body:{error:e.message}};}user=await savePassport(store,user,photo.bytes,photo.type);}
       await save(store, emailKey(email), user);
